@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>80s Retro Snake Game</title>
+    <style>
+        body {
+            background-color: #000000; /* Black background */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Courier New', Courier, monospace; /* Retro font feel */
+        }
+        h1 {
+            color: #00FF00; /* Neon green */
+            text-shadow: 0 0 5px #00FF00, 0 0 10px #00FF00; /* Glow effect */
+            margin-bottom: 20px;
+        }
+        canvas {
+            border: 2px solid #FF00FF; /* Neon pink border */
+            background-color: #000033; /* Dark blue-ish for retro */
+            box-shadow: 0 0 20px #FF00FF; /* Glow around canvas */
+        }
+    </style>
+</head>
+<body>
+    <h1>80s Retro Snake!</h1>
+    <canvas id="gameCanvas" width="600" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const box = 20;
+        const gridSize = 30; // 600 / 20 = 30
+        let snake = [];
+        snake[0] = { x: 14 * box, y: 15 * box }; // Centered start
+        let food = {
+            x: Math.floor(Math.random() * (gridSize - 1) + 1) * box,
+            y: Math.floor(Math.random() * (gridSize - 1) + 1) * box
+        };
+        let score = 0;
+        let d;
+
+        document.addEventListener("keydown", direction);
+
+        function direction(event) {
+            let key = event.keyCode;
+            if (key == 37 && d != "RIGHT") {
+                d = "LEFT";
+            } else if (key == 38 && d != "DOWN") {
+                d = "UP";
+            } else if (key == 39 && d != "LEFT") {
+                d = "RIGHT";
+            } else if (key == 40 && d != "UP") {
+                d = "DOWN";
+            }
+        }
+
+        function collision(head, array) {
+            for (let i = 0; i < array.length; i++) {
+                if (head.x == array[i].x && head.y == array[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function draw() {
+            // Background
+            ctx.fillStyle = "#000033";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid lines for retro feel
+            ctx.strokeStyle = "#333333"; // Dim gray
+            for (let i = 0; i <= canvas.width; i += box) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // Draw snake
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = (i == 0) ? "#00FF00" : "#00CC00"; // Neon green head, darker body
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+                ctx.strokeStyle = "#00FF00"; // Glow outline
+                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+            }
+
+            // Draw food
+            ctx.fillStyle = "#FF00FF"; // Neon pink
+            ctx.fillRect(food.x, food.y, box, box);
+
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+
+            if (d == "LEFT") snakeX -= box;
+            if (d == "UP") snakeY -= box;
+            if (d == "RIGHT") snakeX += box;
+            if (d == "DOWN") snakeY += box;
+
+            if (snakeX == food.x && snakeY == food.y) {
+                score++;
+                food = {
+                    x: Math.floor(Math.random() * (gridSize - 1) + 1) * box,
+                    y: Math.floor(Math.random() * (gridSize - 1) + 1) * box
+                };
+            } else {
+                snake.pop();
+            }
+
+            let newHead = {
+                x: snakeX,
+                y: snakeY
+            };
+
+            // Wall collision
+            if (snakeX < 0 || snakeX >= canvas.width || snakeY < 0 || snakeY >= canvas.height || collision(newHead, snake)) {
+                clearInterval(game);
+                alert('Game Over! Score: ' + score);
+                return;
+            }
+
+            snake.unshift(newHead);
+
+            // Score
+            ctx.fillStyle = "#FFFF00"; // Yellow
+            ctx.font = "24px 'Courier New'";
+            ctx.fillText("Score: " + score, box, box * 1.5);
+        }
+
+        let game = setInterval(draw, 100);
+    </script>
+</body>
+</html>
