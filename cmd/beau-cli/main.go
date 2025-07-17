@@ -234,6 +234,8 @@ func main() {
 	color.HiWhite("Available tools:")
 	color.White("  • Image analysis (analyze images)")
 	color.White("  • File operations (read, write, list files)")
+	color.White("  • Web browsing (capture screenshots of websites)")
+	color.White("  • Shell commands (execute system commands)")
 	fmt.Println()
 	color.HiWhite("Commands:")
 	color.White("  • Type your message and press Enter")

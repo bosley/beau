@@ -38,6 +38,8 @@ type MageVariant string
 const (
 	Mage_FS MageVariant = "mage_fs"
 	Mage_IM MageVariant = "mage_im"
+	Mage_WB MageVariant = "mage_web"
+	Mage_SH MageVariant = "mage_shell"
 )
 
 type Mage interface {
@@ -98,6 +100,10 @@ func (p *Portal) Summon(variant MageVariant) (Mage, error) {
 		return newFSMage(p)
 	case Mage_IM:
 		return newIMMage(p)
+	case Mage_WB:
+		return newWebMage(p)
+	case Mage_SH:
+		return newShellMage(p)
 	default:
 		return nil, fmt.Errorf("unknown variant: %s", variant)
 	}

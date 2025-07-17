@@ -16,6 +16,23 @@ func ValidatePath(projects []beau.ProjectBounds, path string) (string, error) {
 		path = "."
 	}
 
+	// Check for common relative path mistakes and provide helpful errors
+	if strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
+		return "", fmt.Errorf("relative paths like '%s' are not allowed. Use absolute paths starting with / (e.g., /home/user/project/file.txt)", path)
+	}
+
+	if strings.HasPrefix(path, "~/") {
+		return "", fmt.Errorf("tilde expansion '~/' is not supported. Use absolute paths starting with / (e.g., /home/user/project/file.txt)", path)
+	}
+
+	if !strings.HasPrefix(path, "/") && path != "." {
+		// If it looks like just a filename, provide a helpful suggestion
+		if len(projects) > 0 && !strings.Contains(path, "/") {
+			return "", fmt.Errorf("'%s' appears to be a relative path. Use absolute path like: %s/%s", path, projects[0].ABSPath, path)
+		}
+		return "", fmt.Errorf("path '%s' must be absolute (starting with /). Example: /home/user/project/%s", path, path)
+	}
+
 	// Get absolute path
 	absPath, err := filepath.Abs(path)
 	if err != nil {
