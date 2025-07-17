@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/bosley/beau"
@@ -162,8 +165,10 @@ func getUnifiedMageTool(portal *Portal, logger *slog.Logger) toolkit.LlmTool {
 			variant = Mage_FS
 		case "web", "browser":
 			variant = Mage_WB
+		case "shell", "terminal", "command":
+			variant = Mage_SH
 		default:
-			return "", fmt.Errorf("unknown mage type: %s. Available types: 'image', 'filesystem', 'web'", mageType)
+			return "", fmt.Errorf("unknown mage type: %s. Available types: 'image', 'filesystem', 'web', 'shell'", mageType)
 		}
 
 		mage, err := portal.Summon(variant)
@@ -268,6 +273,54 @@ To interact with a page:
 4. Take screenshot of results
 
 Remember: All screenshots include metadata JSON files with capture details.`)
+		case Mage_SH:
+			// Get platform info for context
+			platformInfo := fmt.Sprintf("OS: %s, Arch: %s", runtime.GOOS, runtime.GOARCH)
+			shellInfo := "Shell: "
+			if runtime.GOOS == "windows" {
+				shellInfo += "PowerShell or Command Prompt"
+			} else {
+				if shell := os.Getenv("SHELL"); shell != "" {
+					shellInfo += filepath.Base(shell)
+				} else {
+					shellInfo += "sh"
+				}
+			}
+
+			err = mage.AddToContext(fmt.Sprintf(`You are a shell command assistant. You can execute system commands and scripts.
+
+## Platform Information:
+%s
+%s
+
+## Available Tools:
+1. **execute_command** - Run shell commands with timeout protection
+2. **list_processes** - List running processes
+3. **get_environment** - Get environment variables
+4. **get_working_directory** - Get current directory and contents
+5. **get_system_info** - Get detailed system information
+6. **create_script** - Create executable shell scripts
+
+## Important Guidelines:
+1. Commands run with timeouts for safety (default 30s, max 300s)
+2. All file operations must be within project bounds
+3. Use platform-appropriate commands and syntax
+4. Be mindful of command output size
+5. Scripts are created with proper shebangs and permissions
+
+## Common Workflows:
+
+To run commands:
+1. Check system_info if unsure about platform
+2. Use execute_command with appropriate syntax
+3. Check exit codes and stderr for errors
+
+To create automation:
+1. Use create_script to save reusable commands
+2. Scripts get proper extensions (.sh, .ps1, .bat)
+3. Include descriptions for clarity
+
+Remember: Commands execute in a subprocess with timeout protection. Long-running processes should be managed carefully.`, platformInfo, shellInfo))
 		}
 
 		if err != nil {
@@ -294,18 +347,18 @@ Remember: All screenshots include metadata JSON files with capture details.`)
 	return toolkit.NewTool(
 		beau.ToolSchema{
 			Name:        "task_mage",
-			Description: "Task a specialized mage to perform operations. The mage will use its own tools to complete the task. Three types available: 'image' for image/vision analysis, 'filesystem' for file operations (read/write/list/analyze), 'web' for browser automation and screenshots.",
+			Description: "Task a specialized mage to perform operations. The mage will use its own tools to complete the task. Four types available: 'image' for image/vision analysis, 'filesystem' for file operations (read/write/list/analyze), 'web' for browser automation and screenshots, 'shell' for executing system commands.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"mage_type": map[string]interface{}{
 						"type":        "string",
-						"description": "Type of mage to use. Must be exactly one of: 'image', 'filesystem', or 'web'",
-						"enum":        []string{"image", "filesystem", "web"},
+						"description": "Type of mage to use. Must be exactly one of: 'image', 'filesystem', 'web', or 'shell'",
+						"enum":        []string{"image", "filesystem", "web", "shell"},
 					},
 					"command": map[string]interface{}{
 						"type":        "string",
-						"description": "Natural language command for the mage. Examples for image: 'analyze /home/user/project/screenshot.png and describe the UI elements', 'what objects are in /home/user/project/photo.jpg'. Examples for filesystem: 'read /home/user/project/config.json', 'list all Python files in /home/user/project/src', 'analyze and summarize /home/user/project/logs/app.log'. Examples for web: 'navigate to https://example.com and take a fullpage screenshot', 'capture https://news.ycombinator.com with viewport screenshot'. ALWAYS use absolute paths for files.",
+						"description": "Natural language command for the mage. Examples for image: 'analyze /home/user/project/screenshot.png and describe the UI elements'. Examples for filesystem: 'read /home/user/project/config.json', 'list all Python files in /home/user/project/src'. Examples for web: 'navigate to https://example.com and take a fullpage screenshot'. Examples for shell: 'list all running processes', 'execute ls -la in the project directory', 'show me the system information'.",
 					},
 				},
 				"required": []string{"mage_type", "command"},
