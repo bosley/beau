@@ -57,17 +57,17 @@ func getImageAnalysisTool(config MageKitConfig) toolkit.LlmTool {
 	return toolkit.NewTool(
 		beau.ToolSchema{
 			Name:        "analyze_image_with_mage",
-			Description: "Use the image mage to analyze an image and answer questions about it",
+			Description: "Use the image mage to analyze an image and answer questions about it. The mage will handle image loading and vision model interaction.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"image_path": map[string]interface{}{
 						"type":        "string",
-						"description": "Path to the image file to analyze",
+						"description": "Absolute path to the image file to analyze (must use full path like /home/user/project/image.png)",
 					},
 					"query": map[string]interface{}{
 						"type":        "string",
-						"description": "Specific question or instruction about the image (e.g., 'describe what you see', 'identify the objects', 'what is the dominant color')",
+						"description": "Specific question or instruction about the image. Be descriptive. Examples: 'describe what you see in detail', 'identify all objects in the image', 'what is the dominant color scheme', 'are there any people in this image'",
 					},
 				},
 				"required": []string{"image_path", "query"},
@@ -115,16 +115,14 @@ func getFilesystemTool(config MageKitConfig) toolkit.LlmTool {
 
 	return toolkit.NewTool(
 		beau.ToolSchema{
-			Name: "execute_filesystem_operation",
-			Description: `
-			Use the filesystem mage to perform file operations like reading, writing, listing directories, or analyzing files.
-			The mage will handle large files appropriately by chunking or summarizing.`,
+			Name:        "execute_filesystem_operation",
+			Description: "Use the filesystem mage to perform file operations. The mage has tools for reading, writing, listing, analyzing files. It automatically handles large files by chunking or summarizing. ALWAYS use absolute paths.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"command": map[string]interface{}{
 						"type":        "string",
-						"description": "The filesystem operation command to execute (e.g., 'list files in the current directory', 'analyze file.txt then read it appropriately', 'create a new file called test.txt with content Hello World', 'summarize the large.log file')",
+						"description": "Natural language command for file operation. Examples: 'list all files in /home/user/project', 'read the contents of /home/user/project/main.go', 'create a new file at /home/user/project/test.txt with content Hello World', 'analyze /home/user/project/large.log and summarize its contents', 'search for TODO comments in /home/user/project/src'",
 					},
 				},
 				"required": []string{"command"},
@@ -163,7 +161,7 @@ func getUnifiedMageTool(portal *Portal, logger *slog.Logger) toolkit.LlmTool {
 		case "filesystem", "fs", "file":
 			variant = Mage_FS
 		default:
-			return "", fmt.Errorf("unknown mage type: %s. Available types: 'image', 'filesystem'", mageType)
+			return "", fmt.Errorf("unknown mage type: %s. Must be either 'image' or 'filesystem'", mageType)
 		}
 
 		mage, err := portal.Summon(variant)
@@ -176,15 +174,65 @@ func getUnifiedMageTool(portal *Portal, logger *slog.Logger) toolkit.LlmTool {
 
 		switch variant {
 		case Mage_IM:
-			err = mage.AddToContext("You are a helpful assistant that analyzes images and provides detailed descriptions.")
-		case Mage_FS:
-			err = mage.AddToContext(`You are a helpful assistant with file system access capabilities. Always use the provided functions for file operations.
+			err = mage.AddToContext(`You are an image analysis assistant with vision capabilities. 
 
-IMPORTANT: When working with files:
-1. ALWAYS use 'analyze_file' first to check file size before attempting to read
-2. For files larger than 400KB, use 'read_file_chunk' to read specific portions instead of 'read_file'
-3. When summarizing large files, read them in chunks using 'read_file_chunk' with appropriate line ranges
-4. The 'read_file' tool will automatically provide a summary for files over 400KB, but it's better to use 'read_file_chunk' for controlled reading`)
+## Your Role:
+- Analyze images and provide detailed descriptions
+- Answer specific questions about visual content
+- Identify objects, text, people, and visual elements
+
+## Available Tool:
+You have ONE tool: **analyze_image** - Use this to process any image file
+
+## Important Guidelines:
+1. ALL image paths MUST be absolute (e.g., /home/user/project/image.png)
+2. Be specific and detailed in your analysis
+3. If asked about specific aspects, focus on those while providing context
+4. Describe visual elements objectively and thoroughly
+
+## How to Use:
+When given an image path and query:
+1. Use analyze_image with the absolute path
+2. Provide comprehensive answers based on what you see
+3. If uncertain about something, say so rather than guessing
+
+Remember: The analyze_image tool is your ONLY way to see images. You cannot access image content directly.`)
+		case Mage_FS:
+			err = mage.AddToContext(`You are a filesystem assistant with powerful file operation tools. You MUST use the provided tools for ALL file operations.
+
+## Available Tools:
+1. **analyze_file** - Get file size, line count, and recommendations (ALWAYS use this FIRST)
+2. **read_file** - Read entire files (auto-summarizes if >400KB)
+3. **read_file_chunk** - Read specific line ranges from files
+4. **write_file** - Create or overwrite files
+5. **list_directory** - List directory contents with sizes and dates
+6. **rename_file** - Rename or move files
+7. **grep_file** - Search for patterns in files (regex supported)
+8. **replace_in_file** - Replace text in files (creates backup)
+
+## Critical Rules:
+1. ALWAYS use 'analyze_file' BEFORE attempting to read any file
+2. For files >400KB: Use 'read_file_chunk' to read specific portions
+3. ALL paths MUST be absolute (e.g., /home/user/project/file.txt)
+4. After writing files: ALWAYS list the directory to verify creation
+
+## Common Workflows:
+
+To read a file:
+1. analyze_file to check size
+2. If <400KB: read_file
+3. If >400KB: read_file_chunk with line ranges
+
+To search in files:
+1. grep_file to find matches
+2. read_file_chunk around matches for context
+
+To modify files:
+1. analyze_file first
+2. grep_file or read_file_chunk to find content
+3. replace_in_file or write_file
+
+Remember: You have NO direct filesystem access. These tools are your ONLY way to interact with files.`)
 		}
 
 		if err != nil {
@@ -211,20 +259,18 @@ IMPORTANT: When working with files:
 	return toolkit.NewTool(
 		beau.ToolSchema{
 			Name:        "task_mage",
-			Description: "Task a specialized mage to perform operations. Available mages: 'image' for image analysis, 'filesystem' for file operations.",
+			Description: "Task a specialized mage to perform operations. The mage will use its own tools to complete the task. Two types available: 'image' for image/vision analysis, 'filesystem' for file operations (read/write/list/analyze).",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"mage_type": map[string]interface{}{
 						"type":        "string",
-						"description": "The type of mage to use: 'image', 'filesystem'",
+						"description": "Type of mage to use. Must be exactly one of: 'image' or 'filesystem'",
 						"enum":        []string{"image", "filesystem"},
 					},
 					"command": map[string]interface{}{
-						"type": "string",
-						"description": `The command or task for the mage to execute. Examples: Image: 'analyze image.png', 
-						Filesystem: 'analyze and summarize large.log'. For filesystem operations with large files, 
-						the mage will automatically handle them appropriately.`,
+						"type":        "string",
+						"description": "Natural language command for the mage. Examples for image: 'analyze /home/user/project/screenshot.png and describe the UI elements', 'what objects are in /home/user/project/photo.jpg'. Examples for filesystem: 'read /home/user/project/config.json', 'list all Python files in /home/user/project/src', 'analyze and summarize /home/user/project/logs/app.log'. ALWAYS use absolute paths.",
 					},
 				},
 				"required": []string{"mage_type", "command"},

@@ -120,13 +120,13 @@ func validatedReadFileTool(projects []beau.ProjectBounds) toolkit.LlmTool {
 	return toolkit.NewTool(
 		beau.ToolSchema{
 			Name:        "read_file",
-			Description: "Read the entire content of a file within the project directories. For large files, provides a summary with beginning and end content.",
+			Description: "Read the entire content of a file. For files >400KB, automatically provides a summary with beginning/end snippets. Use analyze_file first to check size.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"file_path": map[string]interface{}{
 						"type":        "string",
-						"description": "Absolute path to the file to read (e.g., /home/user/project/file.txt)",
+						"description": "Absolute path to the file to read. Must start with / (e.g., /home/user/project/main.go)",
 					},
 				},
 				"required": []string{"file_path"},
@@ -243,21 +243,21 @@ func validatedReadFileChunkTool(projects []beau.ProjectBounds) toolkit.LlmTool {
 	return toolkit.NewTool(
 		beau.ToolSchema{
 			Name:        "read_file_chunk",
-			Description: "Read a specific portion of a file by line numbers. Useful for reading large files in manageable chunks.",
+			Description: "Read a specific portion of a file by line numbers. Essential for reading large files in manageable chunks. Use after analyze_file shows file is too large.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"file_path": map[string]interface{}{
 						"type":        "string",
-						"description": "Absolute path to the file to read (e.g., /home/user/project/file.txt)",
+						"description": "Absolute path to the file. Must start with / (e.g., /home/user/project/large.log)",
 					},
 					"start_line": map[string]interface{}{
 						"type":        "integer",
-						"description": "Starting line number (1-indexed). Default is 1.",
+						"description": "Starting line number (1-indexed, inclusive). Default is 1.",
 					},
 					"end_line": map[string]interface{}{
 						"type":        "integer",
-						"description": "Ending line number (inclusive). If not specified, reads 1000 lines from start_line.",
+						"description": "Ending line number (1-indexed, inclusive). If omitted, reads 1000 lines from start_line.",
 					},
 				},
 				"required": []string{"file_path"},
@@ -349,17 +349,17 @@ func validatedWriteFileTool(projects []beau.ProjectBounds) toolkit.LlmTool {
 	return toolkit.NewTool(
 		beau.ToolSchema{
 			Name:        "write_file",
-			Description: "Write content to a file within the project directories",
+			Description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. Creates parent directories as needed.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"file_path": map[string]interface{}{
 						"type":        "string",
-						"description": "Absolute path to the file to write (e.g., /home/user/project/file.txt)",
+						"description": "Absolute path where to write the file. Must start with / (e.g., /home/user/project/new_file.txt)",
 					},
 					"content": map[string]interface{}{
 						"type":        "string",
-						"description": "Content to write to the file",
+						"description": "The exact content to write to the file. Will be written as-is.",
 					},
 				},
 				"required": []string{"file_path", "content"},
@@ -493,13 +493,13 @@ func validatedAnalyzeFileTool(projects []beau.ProjectBounds) toolkit.LlmTool {
 	return toolkit.NewTool(
 		beau.ToolSchema{
 			Name:        "analyze_file",
-			Description: "Analyze a file to get size, modification time, line count, and recommendations for reading",
+			Description: "ALWAYS use this FIRST before any file operation. Returns file size, line count, and recommendations for the best way to read the file.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"file_path": map[string]interface{}{
 						"type":        "string",
-						"description": "Absolute path to the file to analyze (e.g., /home/user/project/file.txt)",
+						"description": "Absolute path to analyze. Must start with / (e.g., /home/user/project/data.csv)",
 					},
 				},
 				"required": []string{"file_path"},
@@ -657,33 +657,33 @@ func validatedGrepFileTool(projects []beau.ProjectBounds) toolkit.LlmTool {
 	return toolkit.NewTool(
 		beau.ToolSchema{
 			Name:        "grep_file",
-			Description: "Search for lines matching a pattern in a file. Returns matching lines with line numbers.",
+			Description: "Search for text patterns in a file. Returns matching lines with line numbers. Supports both simple text and regex patterns.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"file_path": map[string]interface{}{
 						"type":        "string",
-						"description": "Absolute path to the file to search (e.g., /home/user/project/file.txt)",
+						"description": "Absolute path to search in. Must start with / (e.g., /home/user/project/src/main.py)",
 					},
 					"pattern": map[string]interface{}{
 						"type":        "string",
-						"description": "Pattern to search for (supports simple string matching or regex)",
+						"description": "Text or regex pattern to search for (e.g., 'TODO', 'function.*test', 'error|warning')",
 					},
 					"use_regex": map[string]interface{}{
 						"type":        "boolean",
-						"description": "Whether to use regex matching (default: false)",
+						"description": "If true, treats pattern as regex. If false, does simple text matching. Default: false",
 					},
 					"ignore_case": map[string]interface{}{
 						"type":        "boolean",
-						"description": "Whether to ignore case when matching (default: false)",
+						"description": "If true, ignores case when matching. Default: false",
 					},
 					"context_lines": map[string]interface{}{
 						"type":        "integer",
-						"description": "Number of context lines to show before and after matches (default: 0)",
+						"description": "Number of lines to show before/after each match for context. Default: 0",
 					},
 					"max_matches": map[string]interface{}{
 						"type":        "integer",
-						"description": "Maximum number of matches to return (default: 100)",
+						"description": "Maximum matches to return. Default: 100",
 					},
 				},
 				"required": []string{"file_path", "pattern"},
