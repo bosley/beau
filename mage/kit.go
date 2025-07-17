@@ -160,8 +160,10 @@ func getUnifiedMageTool(portal *Portal, logger *slog.Logger) toolkit.LlmTool {
 			variant = Mage_IM
 		case "filesystem", "fs", "file":
 			variant = Mage_FS
+		case "web", "browser":
+			variant = Mage_WB
 		default:
-			return "", fmt.Errorf("unknown mage type: %s. Must be either 'image' or 'filesystem'", mageType)
+			return "", fmt.Errorf("unknown mage type: %s. Available types: 'image', 'filesystem', 'web'", mageType)
 		}
 
 		mage, err := portal.Summon(variant)
@@ -233,6 +235,39 @@ To modify files:
 3. replace_in_file or write_file
 
 Remember: You have NO direct filesystem access. These tools are your ONLY way to interact with files.`)
+		case Mage_WB:
+			err = mage.AddToContext(`You are a web browser automation assistant. You can navigate websites and capture screenshots.
+
+## Available Tools:
+1. **navigate_and_screenshot** - Navigate to URL and capture screenshot (MAIN TOOL)
+2. **navigate_to_url** - Navigate without screenshot
+3. **take_screenshot** - Screenshot current page
+4. **click_element** - Click elements by CSS selector
+5. **fill_form** - Fill form fields
+6. **execute_javascript** - Run JS on page
+7. **wait_for_element** - Wait for element to appear
+8. **get_page_info** - Get page title, URL, etc.
+
+## Important Guidelines:
+1. Screenshots are saved to .web/screenshots/ in the project directory
+2. Use 'fullpage' type for complete page capture, 'viewport' for visible area only
+3. Allow time for pages to load (use wait_seconds parameter)
+4. Default viewport is 1920x1080, but can be customized
+
+## Common Workflows:
+
+To capture a website:
+1. Use navigate_and_screenshot with the URL
+2. Specify screenshot_type (fullpage or viewport)
+3. Set appropriate wait_seconds for page to load
+
+To interact with a page:
+1. Navigate to URL first
+2. Wait for elements if needed
+3. Click or fill forms as required
+4. Take screenshot of results
+
+Remember: All screenshots include metadata JSON files with capture details.`)
 		}
 
 		if err != nil {
@@ -259,18 +294,18 @@ Remember: You have NO direct filesystem access. These tools are your ONLY way to
 	return toolkit.NewTool(
 		beau.ToolSchema{
 			Name:        "task_mage",
-			Description: "Task a specialized mage to perform operations. The mage will use its own tools to complete the task. Two types available: 'image' for image/vision analysis, 'filesystem' for file operations (read/write/list/analyze).",
+			Description: "Task a specialized mage to perform operations. The mage will use its own tools to complete the task. Three types available: 'image' for image/vision analysis, 'filesystem' for file operations (read/write/list/analyze), 'web' for browser automation and screenshots.",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"mage_type": map[string]interface{}{
 						"type":        "string",
-						"description": "Type of mage to use. Must be exactly one of: 'image' or 'filesystem'",
-						"enum":        []string{"image", "filesystem"},
+						"description": "Type of mage to use. Must be exactly one of: 'image', 'filesystem', or 'web'",
+						"enum":        []string{"image", "filesystem", "web"},
 					},
 					"command": map[string]interface{}{
 						"type":        "string",
-						"description": "Natural language command for the mage. Examples for image: 'analyze /home/user/project/screenshot.png and describe the UI elements', 'what objects are in /home/user/project/photo.jpg'. Examples for filesystem: 'read /home/user/project/config.json', 'list all Python files in /home/user/project/src', 'analyze and summarize /home/user/project/logs/app.log'. ALWAYS use absolute paths.",
+						"description": "Natural language command for the mage. Examples for image: 'analyze /home/user/project/screenshot.png and describe the UI elements', 'what objects are in /home/user/project/photo.jpg'. Examples for filesystem: 'read /home/user/project/config.json', 'list all Python files in /home/user/project/src', 'analyze and summarize /home/user/project/logs/app.log'. Examples for web: 'navigate to https://example.com and take a fullpage screenshot', 'capture https://news.ycombinator.com with viewport screenshot'. ALWAYS use absolute paths for files.",
 					},
 				},
 				"required": []string{"mage_type", "command"},
