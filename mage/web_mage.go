@@ -102,6 +102,9 @@ func (m *webMage) AddToContext(context string) error {
 }
 
 func (m *webMage) Execute(ctx context.Context, command string) (string, error) {
+	// Reset result builder for this execution
+	m.resultBuilder.Reset()
+
 	// Add project bounds information
 	if len(m.portal.projectBounds) > 0 {
 		var projectInfo strings.Builder

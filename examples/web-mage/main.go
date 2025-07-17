@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"log/slog"
@@ -14,6 +15,31 @@ import (
 )
 
 func main() {
+	// Parse command-line flags
+	var targetDir string
+	flag.StringVar(&targetDir, "target", "", "Target directory where .web/screenshots will be created (required)")
+	flag.Parse()
+
+	// Validate required flag
+	if targetDir == "" {
+		fmt.Fprintf(os.Stderr, "Error: --target flag is required\n")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	// Resolve target directory to absolute path
+	absTargetDir, err := filepath.Abs(targetDir)
+	if err != nil {
+		log.Fatal("Failed to resolve target directory:", err)
+	}
+
+	// Check if target directory exists
+	if info, err := os.Stat(absTargetDir); err != nil {
+		log.Fatal("Target directory does not exist:", err)
+	} else if !info.IsDir() {
+		log.Fatal("Target path is not a directory:", absTargetDir)
+	}
+
 	// Set up logging
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
@@ -23,12 +49,6 @@ func main() {
 	apiKey := os.Getenv("XAI_API_KEY")
 	if apiKey == "" {
 		log.Fatal("XAI_API_KEY environment variable is required")
-	}
-
-	// Get current working directory for project bounds
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Fatal("Failed to get current directory:", err)
 	}
 
 	// Create portal configuration
@@ -43,9 +63,9 @@ func main() {
 		MiniModel:    beau.DefaultModel_XAI,
 		ProjectBounds: []beau.ProjectBounds{
 			{
-				Name:        "example",
-				Description: "Example project directory",
-				ABSPath:     cwd,
+				Name:        "target",
+				Description: "Target directory for screenshots",
+				ABSPath:     absTargetDir,
 			},
 		},
 		MaxTokens:   8192,
@@ -67,15 +87,27 @@ func main() {
 		log.Fatal("Failed to add context:", err)
 	}
 
-	// Example commands to try
-	commands := []string{
-		"Navigate to https://insula.dev and take a fullpage screenshot",
-		"Capture https://news.ycombinator.com with a viewport screenshot, wait 3 seconds for it to load",
-		"Go to https://golang.org and capture the whole page",
+	// Get URLs from remaining arguments or use defaults
+	var urls []string
+	if len(flag.Args()) > 0 {
+		// Use URLs from command line
+		for _, arg := range flag.Args() {
+			urls = append(urls, fmt.Sprintf("Navigate to %s and take a fullpage screenshot", arg))
+		}
+	} else {
+		// Default examples
+		urls = []string{
+			"Navigate to https://example.com and take a fullpage screenshot",
+			"Capture https://news.ycombinator.com with a viewport screenshot, wait 3 seconds for it to load",
+			"Go to https://golang.org and capture the whole page",
+		}
 	}
 
+	fmt.Printf("Target directory: %s\n", absTargetDir)
+	fmt.Printf("Screenshots will be saved to: %s\n", filepath.Join(absTargetDir, ".web", "screenshots"))
+
 	// Execute commands
-	for i, cmd := range commands {
+	for i, cmd := range urls {
 		fmt.Printf("\n=== Command %d: %s ===\n", i+1, cmd)
 
 		ctx := context.Background()
@@ -89,7 +121,7 @@ func main() {
 	}
 
 	// Show where screenshots were saved
-	screenshotDir := filepath.Join(cwd, ".web", "screenshots")
+	screenshotDir := filepath.Join(absTargetDir, ".web", "screenshots")
 	fmt.Printf("\n=== Screenshots saved to: %s ===\n", screenshotDir)
 
 	// List screenshots
@@ -98,8 +130,15 @@ func main() {
 		fmt.Println("\nSaved files:")
 		for _, entry := range entries {
 			if !entry.IsDir() {
-				fmt.Printf("  - %s\n", entry.Name())
+				info, _ := entry.Info()
+				size := ""
+				if info != nil {
+					size = fmt.Sprintf(" (%d KB)", info.Size()/1024)
+				}
+				fmt.Printf("  - %s%s\n", entry.Name(), size)
 			}
 		}
+	} else {
+		fmt.Printf("Could not list files: %v\n", err)
 	}
 }
